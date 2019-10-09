@@ -182,6 +182,8 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     displayNode.SetAndObserveColorNodeID(colorNode.GetID())
     displayNode.SetLowerThreshold(1)
     displayNode.ApplyThresholdOn()
+    displayNode.SetAutoWindowLevel(False)
+    displayNode.SetWindowLevelMinMax(0, 100)
     return scoresVolumeNode
 
   def getImageFromArray(self, array, referenceImage):
