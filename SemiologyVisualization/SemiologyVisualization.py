@@ -176,7 +176,7 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     displayNode = scoresVolumeNode.GetDisplayNode()
     colorNode = slicer.util.getFirstNodeByClassByName(
       'vtkMRMLColorTableNode',
-      'Viridis',
+      'Plasma',
     )
     displayNode.SetAutoThreshold(False)
     displayNode.SetAndObserveColorNodeID(colorNode.GetID())
