@@ -30,36 +30,62 @@ class SemiologyVisualization(ScriptedLoadableModule):
 # SemiologyVisualizationWidget
 #
 
+
+import string
+semiologies = [f'Semiology {x}' for x in string.ascii_uppercase]
+
+
 class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
+    self.semiologiesDict = self.getSemiologiesDict(semiologies)
     self.makeGUI()
 
   def makeGUI(self):
-    parametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    parametersCollapsibleButton.text = "Parameters"
-    self.layout.addWidget(parametersCollapsibleButton)
+    dominantSideGroupButton = qt.QGroupBox('Dominant side')
+    self.leftDominantRadioButton = qt.QRadioButton('Left')
+    self.leftDominantRadioButton.setChecked(True)
+    self.rightDominantRadioButton = qt.QRadioButton('Right')
+    dominantSideLayout = qt.QHBoxLayout(dominantSideGroupButton)
+    dominantSideLayout.addWidget(self.leftDominantRadioButton)
+    dominantSideLayout.addWidget(self.rightDominantRadioButton)
+    self.layout.addWidget(dominantSideGroupButton)
 
-    parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
+    ezSideGroupButton = qt.QGroupBox('Epileptogenic zone side')
+    self.leftEzRadioButton = qt.QRadioButton('Left')
+    self.leftEzRadioButton.setChecked(True)
+    self.rightEzRadioButton = qt.QRadioButton('Right')
+    ezSideLayout = qt.QHBoxLayout(ezSideGroupButton)
+    ezSideLayout.addWidget(self.leftEzRadioButton)
+    ezSideLayout.addWidget(self.rightEzRadioButton)
+    self.layout.addWidget(ezSideGroupButton)
+
+    semiologiesCollapsibleButton = ctk.ctkCollapsibleButton()
+    semiologiesCollapsibleButton.text = 'Semiologies'
+    self.layout.addWidget(semiologiesCollapsibleButton)
+
+    semiologiesFormLayout = qt.QFormLayout(semiologiesCollapsibleButton)
 
     self.referencePathEdit = ctk.ctkPathLineEdit()
-    # parametersFormLayout.addRow(
+    # semiologiesFormLayout.addRow(
     #   "Path to reference T1 MRI: ", self.referencePathEdit)
 
     self.parcellationPathEdit = ctk.ctkPathLineEdit()
-    # parametersFormLayout.addRow(
+    # semiologiesFormLayout.addRow(
     #   "Path to GIF parcellation: ", self.parcellationPathEdit)
 
     self.scoresPathEdit = ctk.ctkPathLineEdit()
     self.scoresPathEdit.nameFilters = ['*.csv']
-    parametersFormLayout.addRow(
+    semiologiesFormLayout.addRow(
       "Path to semiology scores: ", self.scoresPathEdit)
+
+    # semiologiesFormLayout.addWidget(self.getSemiologiesWidget())
 
     self.applyButton = qt.QPushButton("Apply")
     self.applyButton.toolTip = "Run the algorithm."
     self.applyButton.enabled = False
-    parametersFormLayout.addRow(self.applyButton)
+    semiologiesFormLayout.addRow(self.applyButton)
 
     # connections
     self.parcellationPathEdit.currentPathChanged.connect(self.onSelect)
@@ -69,6 +95,28 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
     # Add vertical spacer
     self.layout.addStretch(1)
+
+  def getSemiologiesWidget(self):
+    semiologiesWidget = qt.QWidget()
+    semiologiesLayout = qt.QGridLayout(semiologiesWidget)
+    semiologiesLayout.addWidget(qt.QLabel('<b>Semiology</b>'), 0, 0)
+    semiologiesLayout.addWidget(qt.QLabel('<b>Left</b>'), 0, 1)
+    semiologiesLayout.addWidget(qt.QLabel('<b>Right</b>'), 0, 2)
+    iterable = enumerate(self.semiologiesDict.items(), start=1)
+    for row, (semiology, widgetsDict) in iterable:
+      semiologiesLayout.addWidget(qt.QLabel(semiology), row, 0)
+      semiologiesLayout.addWidget(widgetsDict['leftCheckBox'], row, 1)
+      semiologiesLayout.addWidget(widgetsDict['rightCheckBox'], row, 2)
+    return semiologiesWidget
+
+  def getSemiologiesDict(self, semiologies):
+    semiologiesDict = {}
+    for semiology in semiologies:
+      semiologiesDict[semiology] = dict(
+        leftCheckBox=qt.QCheckBox(),
+        rightCheckBox=qt.QCheckBox(),
+      )
+    return semiologiesDict
 
   def onSelect(self):
     # parcellationPath = Path(self.parcellationPathEdit.currentPath)
@@ -240,3 +288,15 @@ class SemiologyVisualizationTest(ScriptedLoadableModuleTest):
     logic = SemiologyVisualizationLogic()
     self.assertIsNotNone( logic.hasImageData(volumeNode) )
     self.delayDisplay('Test passed!')
+
+
+LOREN_IPSUM = """Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse magna purus, accumsan non laoreet id, commodo eget ligula. Vestibulum eros sem, congue non elit at, ornare vestibulum odio. Duis dapibus egestas ultricies. Morbi dignissim sapien a ipsum volutpat, a rhoncus ante finibus. Phasellus consequat et neque at dignissim. Nullam hendrerit elementum accumsan. Phasellus nec lectus id eros rutrum feugiat et eget elit. Curabitur luctus enim a consectetur pharetra. Donec convallis orci arcu, eget tempor orci faucibus non. Curabitur semper congue mattis.
+
+Morbi facilisis eleifend enim quis dignissim. Interdum et malesuada fames ac ante ipsum primis in faucibus. In eget magna a quam gravida tincidunt. Sed convallis eget purus quis blandit. Integer et nisi ante. Sed ultrices est in neque tempus, eu tristique turpis ullamcorper. Pellentesque pharetra turpis vel mattis vestibulum.
+
+In finibus, mauris vitae condimentum blandit, urna tortor blandit libero, ac molestie risus velit ac neque. Aliquam ornare sagittis ligula cursus tempus. Maecenas suscipit vulputate imperdiet. Ut blandit placerat porttitor. In maximus, ante quis tempus pretium, sapien neque vehicula diam, semper volutpat dui nisl gravida nunc. Quisque sagittis sit amet massa ut dictum. Quisque dignissim, orci id facilisis fermentum, tortor elit hendrerit lectus, et dictum ante magna non ligula. Fusce vitae pretium augue, porta semper ante. Maecenas porta, purus eu lobortis cursus, enim enim mollis sem, non tempus velit arcu quis augue. Etiam eu leo ipsum.
+
+Aenean lorem dolor, congue quis iaculis vel, facilisis a nunc. Mauris accumsan sapien ut sem fermentum ultrices. Praesent volutpat mauris non erat fringilla, accumsan consequat justo rhoncus. Phasellus eu sollicitudin turpis. Curabitur sit amet rutrum purus. Proin ac velit massa. Fusce blandit turpis vel mi commodo, nec posuere lacus accumsan. Nunc est augue, imperdiet nec bibendum at, pulvinar at sapien. Curabitur ac nibh urna. Ut vitae magna mauris.
+
+Praesent a vestibulum enim, a dignissim dui. In porttitor faucibus orci, sit amet euismod metus gravida ac. Nullam at ante purus. Morbi sed nibh ipsum. Integer imperdiet aliquet est. Fusce eu volutpat purus. Integer ac bibendum mauris, ac porta leo. Nam condimentum venenatis ligula quis iaculis. Donec risus leo, euismod in tincidunt nec, cursus sagittis massa. Pellentesque at mauris ipsum. Etiam luctus at sem at condimentum. Vivamus vestibulum dolor sit amet pretium aliquet.
+"""
