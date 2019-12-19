@@ -257,21 +257,19 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
   def getDefaultParcellationPath(self):
     return self.getImagesDir() / 'MNI_152_gif.nii.gz'
 
-  def getScoresVolumeNode(self, scoresPath, parcellationLabelMapNode):
+  def getScoresVolumeNode(self, scoresDict, parcellationLabelMapNode):
     parcellationImage = su.PullVolumeFromSlicer(parcellationLabelMapNode)
     parcellationArray = sitk.GetArrayViewFromImage(parcellationImage)
     scoresArray = np.zeros_like(parcellationArray)
 
-    with open(scoresPath) as csvfile:
-      reader = csv.reader(csvfile)
-      next(reader)  # assume there is a header row
-      for (label, score) in reader:
-        label = int(label)
-        score = float(score)
-        labelMask = parcellationArray == label
-        scoresArray[labelMask] = score
+    for (label, score) in scoresDict.items():
+      label = int(label)
+      score = float(score)
+      labelMask = parcellationArray == label
+      scoresArray[labelMask] = score
+
     scoresImage = self.getImageFromArray(scoresArray, parcellationImage)
-    scoresName = f'Scores {Path(scoresPath).stem}'
+    scoresName = 'Scores'
     scoresVolumeNode = su.PushVolumeToSlicer(scoresImage, name=scoresName)
     displayNode = scoresVolumeNode.GetDisplayNode()
     colorNode = slicer.util.getFirstNodeByClassByName(
