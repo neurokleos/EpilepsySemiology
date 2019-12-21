@@ -11,6 +11,8 @@ import sitkUtils as su
 from slicer.ScriptedLoadableModule import *
 
 
+BLACK = 0, 0, 0
+GRAY = 0.5, 0.5, 0.5
 WHITE = 1, 1, 1
 
 #
@@ -89,25 +91,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.layout.addWidget(semiologiesCollapsibleButton)
 
     semiologiesFormLayout = qt.QFormLayout(semiologiesCollapsibleButton)
-
-    self.referencePathEdit = ctk.ctkPathLineEdit()
-    # semiologiesFormLayout.addRow(
-    #   "Path to reference T1 MRI: ", self.referencePathEdit)
-
-    self.parcellationPathEdit = ctk.ctkPathLineEdit()
-    # semiologiesFormLayout.addRow(
-    #   "Path to GIF parcellation: ", self.parcellationPathEdit)
-
-    self.scoresPathEdit = ctk.ctkPathLineEdit()
-    self.scoresPathEdit.nameFilters = ['*.csv']
-    semiologiesFormLayout.addRow(
-      "Path to semiology scores: ", self.scoresPathEdit)
-
-    # semiologiesFormLayout.addWidget(self.getSemiologiesWidget())
-
-    self.parcellationPathEdit.currentPathChanged.connect(self.onSelect)
-    self.referencePathEdit.currentPathChanged.connect(self.onSelect)
-    self.scoresPathEdit.currentPathChanged.connect(self.onSelect)
+    semiologiesFormLayout.addWidget(self.getSemiologiesWidget())
 
   def makeLoadDataButton(self):
     self.loadDataButton = qt.QPushButton('Load data')
@@ -163,12 +147,24 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
   def onLoadDataButton(self):
     logic = SemiologyVisualizationLogic()
     self.referenceVolumeNode = slicer.util.loadVolume(
-        str(logic.getDefaultReferencePath()))
+      str(logic.getDefaultReferencePath()))
+    self.parcellationLabelMapNode = logic.loadParcellation(
+      logic.getDefaultParcellationPath())
+    slicer.util.setSliceViewerLayers(
+      label=None,
+    )
     self.parcellation.load()
     self.applyButton.enabled = True
 
   def onApplyButton(self):
-    self.updateColors()
+    colorNode = slicer.util.getFirstNodeByClassByName(
+      'vtkMRMLColorTableNode',
+      'Plasma',
+    )
+    scoresDict = self.logic.getTestScores()
+    self.scoresVolumeNode = self.logic.getScoresVolumeNode(
+      scoresDict, colorNode, self.parcellationLabelMapNode)
+    self.parcellation.setScoresColors(scoresDict, colorNode)
     # # self.parcellationPathEdit.addCurrentPathToHistory()
     # # self.referencePathEdit.addCurrentPathToHistory()
     # self.scoresPathEdit.addCurrentPathToHistory()
@@ -188,12 +184,12 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     #   self.scoresPathEdit.currentPath,
     #   self.parcellationVolumeNode,
     # )
-    # slicer.util.setSliceViewerLayers(
-    #   foreground=self.scoresNode,
-    #   foregroundOpacity=1,
-    #   labelOpacity=0,
-    # )
-    # self.scoresNode.GetDisplayNode().SetInterpolate(False)
+    slicer.util.setSliceViewerLayers(
+      foreground=self.scoresVolumeNode,
+      foregroundOpacity=0,
+      labelOpacity=0,
+    )
+    self.scoresVolumeNode.GetDisplayNode().SetInterpolate(False)
 
 
 #
@@ -217,9 +213,6 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     displayNode = volumeNode.GetDisplayNode()
     displayNode.SetAndObserveColorNodeID(colorNode.GetID())
     return volumeNode
-
-  def labelMapToSegmentation(self, labelMapNode):
-    pass
 
   def getGifTablePath(self, version=None):
     version = 3 if version is None else version
@@ -257,7 +250,7 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
   def getDefaultParcellationPath(self):
     return self.getImagesDir() / 'MNI_152_gif.nii.gz'
 
-  def getScoresVolumeNode(self, scoresDict, parcellationLabelMapNode):
+  def getScoresVolumeNode(self, scoresDict, colorNode, parcellationLabelMapNode):
     parcellationImage = su.PullVolumeFromSlicer(parcellationLabelMapNode)
     parcellationArray = sitk.GetArrayViewFromImage(parcellationImage)
     scoresArray = np.zeros_like(parcellationArray)
@@ -272,16 +265,14 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     scoresName = 'Scores'
     scoresVolumeNode = su.PushVolumeToSlicer(scoresImage, name=scoresName)
     displayNode = scoresVolumeNode.GetDisplayNode()
-    colorNode = slicer.util.getFirstNodeByClassByName(
-      'vtkMRMLColorTableNode',
-      'Plasma',
-    )
     displayNode.SetAutoThreshold(False)
     displayNode.SetAndObserveColorNodeID(colorNode.GetID())
     displayNode.SetLowerThreshold(1)
     displayNode.ApplyThresholdOn()
     displayNode.SetAutoWindowLevel(False)
-    displayNode.SetWindowLevelMinMax(0, 100)
+    windowMin = scoresArray[scoresArray > 0].min()
+    windowMax = scoresArray.max()
+    displayNode.SetWindowLevelMinMax(windowMin, windowMax)
     return scoresVolumeNode
 
   def getImageFromArray(self, array, referenceImage):
@@ -418,7 +409,7 @@ class Parcellation(ABC):
     progressDialog = slicer.util.createProgressDialog(
       value=0,
       maximum=numSegments,
-      windowTitle='Changing colors...',
+      windowTitle='Setting colors...',
     )
     for i, segment in enumerate(segments):
       progressDialog.setValue(i)
@@ -429,23 +420,24 @@ class Parcellation(ABC):
     slicer.app.processEvents()
     progressDialog.close()
 
-  def setScoresColors(self, scoresDict, colorNode, defaultOpacity=0.2):
+  def setScoresColors(self, scoresDict, colorNode):
     segments = self.getSegments()
     numSegments = len(segments)
     progressDialog = slicer.util.createProgressDialog(
       value=0,
       maximum=numSegments,
-      windowTitle='Changing colors...',
+      windowTitle='Setting colors...',
     )
     for i, segment in enumerate(segments):
       progressDialog.setValue(i)
       slicer.app.processEvents()
       label = self.getLabelFromSegment(segment)
-      scores = scoresDict.values()
+      scores = np.array(list(scoresDict.values()))
+      scores = scores[scores > 0]  # do I want this?
       minScore = min(scores)
       maxScore = max(scores)
-      color = WHITE
-      opacity = defaultOpacity
+      color = BLACK
+      opacity = 0
       if label in scoresDict:
         score = scoresDict[label]
         if score > 0:
@@ -454,7 +446,7 @@ class Parcellation(ABC):
           score /= maxScore
           color = self.getColorFromScore(score, colorNode)
       segment.SetColor(color)
-      # segment.SetOpacity(opacity)  # need to access to segNode.displayNode
+      self.setSegmentOpacity2D(segment, opacity)
     progressDialog.setValue(numSegments)
     slicer.app.processEvents()
     progressDialog.close()
@@ -475,7 +467,7 @@ class Parcellation(ABC):
     progressDialog = slicer.util.createProgressDialog(
         value=0,
         maximum=numSegments,
-        windowTitle='Changing colors...',
+        windowTitle='Setting colors...',
     )
     for i, segment in enumerate(segments):
       progressDialog.setValue(i)
@@ -488,6 +480,11 @@ class Parcellation(ABC):
 
   def getRandomColor(self, normalized=True):
     return np.random.rand(3)
+
+  def setSegmentOpacity2D(self, segment, opacity):
+    displayNode = self.segmentationNode.GetDisplayNode()
+    displayNode.SetSegmentOpacity2DFill(segment.GetName(), opacity)
+    displayNode.SetSegmentOpacity2DOutline(segment.GetName(), opacity)
 
 
 class GIFParcellation(Parcellation):
