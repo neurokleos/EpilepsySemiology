@@ -56,8 +56,8 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     slicer.semiologyVisualization = self
 
   def makeGUI(self):
-    self.makeDominantSideButton()
-    self.makeEzSideButton()
+    self.makeDominantHemisphereButton()
+    self.makeEzHemisphereButton()
     self.makeSemiologiesButton()
     self.makeLoadDataButton()
     self.makeApplyButton()
@@ -65,25 +65,25 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     # Add vertical spacer
     self.layout.addStretch(1)
 
-  def makeDominantSideButton(self):
-    dominantSideGroupButton = qt.QGroupBox('Dominant side')
+  def makeDominantHemisphereButton(self):
+    dominantHemisphereGroupButton = qt.QGroupBox('Dominant hemisphere')
     self.leftDominantRadioButton = qt.QRadioButton('Left')
     self.leftDominantRadioButton.setChecked(True)
     self.rightDominantRadioButton = qt.QRadioButton('Right')
-    dominantSideLayout = qt.QHBoxLayout(dominantSideGroupButton)
-    dominantSideLayout.addWidget(self.leftDominantRadioButton)
-    dominantSideLayout.addWidget(self.rightDominantRadioButton)
-    self.layout.addWidget(dominantSideGroupButton)
+    dominantHemisphereLayout = qt.QHBoxLayout(dominantHemisphereGroupButton)
+    dominantHemisphereLayout.addWidget(self.leftDominantRadioButton)
+    dominantHemisphereLayout.addWidget(self.rightDominantRadioButton)
+    self.layout.addWidget(dominantHemisphereGroupButton)
 
-  def makeEzSideButton(self):
-    ezSideGroupButton = qt.QGroupBox('Epileptogenic zone side')
+  def makeEzHemisphereButton(self):
+    ezHemisphereGroupButton = qt.QGroupBox('Epileptogenic zone')
     self.leftEzRadioButton = qt.QRadioButton('Left')
     self.leftEzRadioButton.setChecked(True)
     self.rightEzRadioButton = qt.QRadioButton('Right')
-    ezSideLayout = qt.QHBoxLayout(ezSideGroupButton)
-    ezSideLayout.addWidget(self.leftEzRadioButton)
-    ezSideLayout.addWidget(self.rightEzRadioButton)
-    self.layout.addWidget(ezSideGroupButton)
+    ezHemisphereLayout = qt.QHBoxLayout(ezHemisphereGroupButton)
+    ezHemisphereLayout.addWidget(self.leftEzRadioButton)
+    ezHemisphereLayout.addWidget(self.rightEzRadioButton)
+    self.layout.addWidget(ezHemisphereGroupButton)
 
   def makeSemiologiesButton(self):
     semiologiesCollapsibleButton = ctk.ctkCollapsibleButton()
