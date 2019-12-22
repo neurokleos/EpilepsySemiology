@@ -58,6 +58,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
   def makeGUI(self):
     self.makeDominantHemisphereButton()
     self.makeEzHemisphereButton()
+    self.makeColorsButton()
     self.makeSemiologiesButton()
     self.makeLoadDataButton()
     self.makeApplyButton()
@@ -84,6 +85,24 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     ezHemisphereLayout.addWidget(self.leftEzRadioButton)
     ezHemisphereLayout.addWidget(self.rightEzRadioButton)
     self.layout.addWidget(ezHemisphereGroupButton)
+
+  def makeColorsButton(self):
+    self.colorSelector = slicer.qMRMLColorTableComboBox()
+    self.colorSelector.nodeTypes = ["vtkMRMLColorNode"]
+    self.colorSelector.hideChildNodeTypes = (
+      "vtkMRMLDiffusionTensorDisplayPropertiesNode",
+      "vtkMRMLProceduralColorNode",
+    )
+    self.colorSelector.addEnabled = False
+    self.colorSelector.removeEnabled = False
+    self.colorSelector.noneEnabled = False
+    self.colorSelector.selectNodeUponCreation = True
+    self.colorSelector.showHidden = True
+    self.colorSelector.showChildNodeTypes = True
+    self.colorSelector.setMRMLScene(slicer.mrmlScene)
+    self.colorSelector.setToolTip("Choose a colormap")
+    self.colorSelector.currentNodeID = 'vtkMRMLColorTableNodeFileCividis.txt'
+    self.layout.addWidget(self.colorSelector)
 
   def makeSemiologiesButton(self):
     semiologiesCollapsibleButton = ctk.ctkCollapsibleButton()
@@ -159,7 +178,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
   def onApplyButton(self):
     colorNode = slicer.util.getFirstNodeByClassByName(
       'vtkMRMLColorTableNode',
-      'Plasma',
+      'Cividis',
     )
     scoresDict = self.logic.getTestScores()
     self.scoresVolumeNode = self.logic.getScoresVolumeNode(
@@ -387,6 +406,7 @@ class Parcellation(ABC):
       logging.info(f'Segmentation not found in scene: {stem}')
       node = slicer.util.loadSegmentation(str(self.segmentationPath))
     self.segmentationNode = node
+    self.segmentationNode.GetDisplayNode().SetOpacity2DFill(1)
 
   def isValidNumber(self, number):
     return self.colorTable.isValidNumber(number)
@@ -413,9 +433,12 @@ class Parcellation(ABC):
     )
     for i, segment in enumerate(segments):
       progressDialog.setValue(i)
+      progressDialog.setLabelText(segment.GetName())
       slicer.app.processEvents()
       color = self.getColorFromSegment(segment)
       segment.SetColor(color)
+      self.setSegmentOpacity(segment, 1, dimension=2)
+      self.setSegmentOpacity(segment, 1, dimension=3)
     progressDialog.setValue(numSegments)
     slicer.app.processEvents()
     progressDialog.close()
@@ -430,6 +453,7 @@ class Parcellation(ABC):
     )
     for i, segment in enumerate(segments):
       progressDialog.setValue(i)
+      progressDialog.setLabelText(segment.GetName())
       slicer.app.processEvents()
       label = self.getLabelFromSegment(segment)
       scores = np.array(list(scoresDict.values()))
@@ -446,7 +470,8 @@ class Parcellation(ABC):
           score /= maxScore
           color = self.getColorFromScore(score, colorNode)
       segment.SetColor(color)
-      self.setSegmentOpacity2D(segment, opacity)
+      self.setSegmentOpacity(segment, opacity, dimension=2)
+      self.setSegmentOpacity(segment, opacity, dimension=3)
     progressDialog.setValue(numSegments)
     slicer.app.processEvents()
     progressDialog.close()
@@ -481,10 +506,13 @@ class Parcellation(ABC):
   def getRandomColor(self, normalized=True):
     return np.random.rand(3)
 
-  def setSegmentOpacity2D(self, segment, opacity):
+  def setSegmentOpacity(self, segment, opacity, dimension):
     displayNode = self.segmentationNode.GetDisplayNode()
-    displayNode.SetSegmentOpacity2DFill(segment.GetName(), opacity)
-    displayNode.SetSegmentOpacity2DOutline(segment.GetName(), opacity)
+    if dimension == 2:
+      displayNode.SetSegmentOpacity2DFill(segment.GetName(), opacity)
+      displayNode.SetSegmentOpacity2DOutline(segment.GetName(), opacity)
+    elif dimension == 3:
+      displayNode.SetSegmentOpacity3D(segment.GetName(), opacity)
 
 
 class GIFParcellation(Parcellation):
