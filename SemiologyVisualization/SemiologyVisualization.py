@@ -53,6 +53,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
       colorTablePath=self.logic.getGifTablePath(),
     )
     self.makeGUI()
+    self.parcellationLabelMapNode = None
     slicer.semiologyVisualization = self
 
   def makeGUI(self):
@@ -102,6 +103,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.settingsLayout.addRow('Epileptogenic zone: ', ezHemisphereLayout)
 
   def makeColorsButton(self):
+    self.logic.removeColorMaps()
     self.colorSelector = slicer.qMRMLColorTableComboBox()
     self.colorSelector.nodeTypes = ["vtkMRMLColorNode"]
     self.colorSelector.hideChildNodeTypes = (
@@ -117,6 +119,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.colorSelector.setMRMLScene(slicer.mrmlScene)
     self.colorSelector.setToolTip("Choose a colormap")
     self.colorSelector.currentNodeID = 'vtkMRMLColorTableNodeFileCividis.txt'
+    self.colorSelector.currentNodeID = None
     self.colorSelector.currentNodeChanged.connect(self.onAutoUpdateButton)
     self.settingsLayout.addRow('Colormap: ', self.colorSelector)
 
@@ -168,8 +171,13 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
   def updateColors(self):
     colorNode = self.colorSelector.currentNode()
     scoresDict = self.getScoresFromGUI()
-    self.scoresVolumeNode = self.logic.getScoresVolumeNode(
-      scoresDict, colorNode, self.parcellationLabelMapNode)
+    try:
+      self.scoresVolumeNode = self.logic.getScoresVolumeNode(
+        scoresDict, colorNode, self.parcellationLabelMapNode)
+    except Exception as e:
+      print(e)
+      print('Error getting parcellation label map. Click on "Load data"')
+      return
     self.parcellation.setScoresColors(scoresDict, colorNode)
 
     slicer.util.setSliceViewerLayers(
@@ -242,7 +250,8 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     stem = Path(imagePath).name.split('.')[0]
     try:
       volumeNode = slicer.util.getNode(stem)
-    except slicer.util.MRMLNodeNotFoundException:
+    except Exception as e:  # slicer.util.MRMLNodeNotFoundException:
+      print(e)
       volumeNode = slicer.util.loadLabelVolume(str(imagePath))
       colorNode = self.getGifColorNode(version=gifVersion)
       displayNode = volumeNode.GetDisplayNode()
@@ -327,6 +336,11 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
   def getTestScores(self):
     scoresPath = self.getResourcesDir() / 'Test' / 'head.csv'
     return self.readScores(scoresPath)
+
+  def removeColorMaps(self):
+    for colorNode in slicer.util.getNodesByClass('vtkMRMLColorTableNode'):
+      if colorNode.GetName() not in COLORMAPS:
+        slicer.mrmlScene.RemoveNode(colorNode)
 
 
 class SemiologyVisualizationTest(ScriptedLoadableModuleTest):
@@ -590,3 +604,19 @@ class ColorTable(ABC):
 
 class GIFColorTable(ColorTable):
   pass
+
+
+COLORMAPS = [
+  'Cividis',
+  'Plasma',
+  'Viridis',
+  'Magma',
+  'Inferno',
+  'Grey',
+  'Red',
+  'Green',
+  'Blue',
+  'Yellow',
+  'Cyan',
+  'Magenta',
+]
