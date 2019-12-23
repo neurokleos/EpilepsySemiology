@@ -13,6 +13,7 @@ from slicer.ScriptedLoadableModule import *
 
 BLACK = 0, 0, 0
 GRAY = 0.5, 0.5, 0.5
+LIGHT_GRAY = 0.75, 0.75, 0.75
 WHITE = 1, 1, 1
 
 #
@@ -47,7 +48,6 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
     self.logic = SemiologyVisualizationLogic()
-    self.semiologiesDict = self.logic.getSemiologiesDict(semiologies)
     self.parcellation = GIFParcellation(
       segmentationPath=self.logic.getGifSegmentationPath(),
       colorTablePath=self.logic.getGifTablePath(),
@@ -56,35 +56,50 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     slicer.semiologyVisualization = self
 
   def makeGUI(self):
-    self.makeDominantHemisphereButton()
-    self.makeEzHemisphereButton()
-    self.makeColorsButton()
-    self.makeSemiologiesButton()
     self.makeLoadDataButton()
-    self.makeApplyButton()
+    self.makeSettingsButton()
+    self.makeSemiologiesButton()
+    self.makeUpdateButton()
 
     # Add vertical spacer
     self.layout.addStretch(1)
 
+  def makeSettingsButton(self):
+    self.settingsCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.settingsCollapsibleButton.enabled = False
+    self.settingsCollapsibleButton.text = 'Settings'
+    self.settingsLayout = qt.QFormLayout(self.settingsCollapsibleButton)
+    self.layout.addWidget(self.settingsCollapsibleButton)
+
+    self.makeDominantHemisphereButton()
+    self.makeEzHemisphereButton()
+    self.makeColorsButton()
+    self.autoUpdateCheckBox = qt.QCheckBox()
+    self.autoUpdateCheckBox.setChecked(True)
+    self.settingsLayout.addRow('Auto-update: ', self.autoUpdateCheckBox)
+
   def makeDominantHemisphereButton(self):
-    dominantHemisphereGroupButton = qt.QGroupBox('Dominant hemisphere')
     self.leftDominantRadioButton = qt.QRadioButton('Left')
-    self.leftDominantRadioButton.setChecked(True)
     self.rightDominantRadioButton = qt.QRadioButton('Right')
-    dominantHemisphereLayout = qt.QHBoxLayout(dominantHemisphereGroupButton)
+    self.leftDominantRadioButton.setChecked(True)
+    dominantHemisphereLayout = qt.QHBoxLayout()
     dominantHemisphereLayout.addWidget(self.leftDominantRadioButton)
     dominantHemisphereLayout.addWidget(self.rightDominantRadioButton)
-    self.layout.addWidget(dominantHemisphereGroupButton)
+    self.leftDominantRadioButton.toggled.connect(self.onAutoUpdateButton)
+    self.rightDominantRadioButton.toggled.connect(self.onAutoUpdateButton)
+    self.settingsLayout.addRow(
+      'Dominant hemisphere: ', dominantHemisphereLayout)
 
   def makeEzHemisphereButton(self):
-    ezHemisphereGroupButton = qt.QGroupBox('Epileptogenic zone')
     self.leftEzRadioButton = qt.QRadioButton('Left')
-    self.leftEzRadioButton.setChecked(True)
     self.rightEzRadioButton = qt.QRadioButton('Right')
-    ezHemisphereLayout = qt.QHBoxLayout(ezHemisphereGroupButton)
+    self.leftEzRadioButton.setChecked(True)
+    ezHemisphereLayout = qt.QHBoxLayout()
     ezHemisphereLayout.addWidget(self.leftEzRadioButton)
     ezHemisphereLayout.addWidget(self.rightEzRadioButton)
-    self.layout.addWidget(ezHemisphereGroupButton)
+    self.leftEzRadioButton.toggled.connect(self.onAutoUpdateButton)
+    self.rightEzRadioButton.toggled.connect(self.onAutoUpdateButton)
+    self.settingsLayout.addRow('Epileptogenic zone: ', ezHemisphereLayout)
 
   def makeColorsButton(self):
     self.colorSelector = slicer.qMRMLColorTableComboBox()
@@ -102,14 +117,17 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.colorSelector.setMRMLScene(slicer.mrmlScene)
     self.colorSelector.setToolTip("Choose a colormap")
     self.colorSelector.currentNodeID = 'vtkMRMLColorTableNodeFileCividis.txt'
-    self.layout.addWidget(self.colorSelector)
+    self.colorSelector.currentNodeChanged.connect(self.onAutoUpdateButton)
+    self.settingsLayout.addRow('Colormap: ', self.colorSelector)
 
   def makeSemiologiesButton(self):
-    semiologiesCollapsibleButton = ctk.ctkCollapsibleButton()
-    semiologiesCollapsibleButton.text = 'Semiologies'
-    self.layout.addWidget(semiologiesCollapsibleButton)
+    self.semiologiesCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.semiologiesCollapsibleButton.enabled = False
+    self.semiologiesCollapsibleButton.text = 'Semiologies'
+    self.semiologiesCollapsibleButton.setChecked(False)
+    self.layout.addWidget(self.semiologiesCollapsibleButton)
 
-    semiologiesFormLayout = qt.QFormLayout(semiologiesCollapsibleButton)
+    semiologiesFormLayout = qt.QFormLayout(self.semiologiesCollapsibleButton)
     semiologiesFormLayout.addWidget(self.getSemiologiesWidget())
 
   def makeLoadDataButton(self):
@@ -117,35 +135,50 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.loadDataButton.clicked.connect(self.onLoadDataButton)
     self.layout.addWidget(self.loadDataButton)
 
-  def makeApplyButton(self):
-    self.applyButton = qt.QPushButton('Apply')
-    self.applyButton.enabled = False
-    self.applyButton.clicked.connect(self.onApplyButton)
-    self.layout.addWidget(self.applyButton)
+  def makeUpdateButton(self):
+    self.updateButton = qt.QPushButton('Update')
+    self.updateButton.enabled = False
+    self.updateButton.clicked.connect(self.updateColors)
+    self.layout.addWidget(self.updateButton)
 
   def getSemiologiesWidget(self):
+    semiologiesDict = self.logic.getSemiologiesDict(
+      semiologies, self.onAutoUpdateButton)
     semiologiesWidget = qt.QWidget()
     semiologiesLayout = qt.QGridLayout(semiologiesWidget)
     semiologiesLayout.addWidget(qt.QLabel('<b>Semiology</b>'), 0, 0)
     semiologiesLayout.addWidget(qt.QLabel('<b>Left</b>'), 0, 1)
     semiologiesLayout.addWidget(qt.QLabel('<b>Right</b>'), 0, 2)
-    iterable = enumerate(self.semiologiesDict.items(), start=1)
+    iterable = enumerate(semiologiesDict.items(), start=1)
     for row, (semiology, widgetsDict) in iterable:
       semiologiesLayout.addWidget(qt.QLabel(semiology), row, 0)
       semiologiesLayout.addWidget(widgetsDict['leftCheckBox'], row, 1)
       semiologiesLayout.addWidget(widgetsDict['rightCheckBox'], row, 2)
     return semiologiesWidget
 
-  def updateColors(self):
-    self.parcellation.setRandomColors()
-
-    # if self.useGifColors:
-    #   parcellation.setOriginalColors()
-    # else:
-    #   scores = self.getScores()
-    #   parcellation.setScoresColors(scores)
+  def getScoresFromGUI(self):
+    # TODO
+    return self.logic.getTestScores()
 
   # Slots
+  def onAutoUpdateButton(self):
+    if self.autoUpdateCheckBox.isChecked():
+      self.updateColors()
+
+  def updateColors(self):
+    colorNode = self.colorSelector.currentNode()
+    scoresDict = self.getScoresFromGUI()
+    self.scoresVolumeNode = self.logic.getScoresVolumeNode(
+      scoresDict, colorNode, self.parcellationLabelMapNode)
+    self.parcellation.setScoresColors(scoresDict, colorNode)
+
+    slicer.util.setSliceViewerLayers(
+      foreground=self.scoresVolumeNode,
+      foregroundOpacity=0,
+      labelOpacity=0,
+    )
+    self.scoresVolumeNode.GetDisplayNode().SetInterpolate(False)
+
   def onSelect(self):
     # parcellationPath = Path(self.parcellationPathEdit.currentPath)
     # referencePath = Path(self.referencePathEdit.currentPath)
@@ -165,50 +198,17 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
   def onLoadDataButton(self):
     logic = SemiologyVisualizationLogic()
-    self.referenceVolumeNode = slicer.util.loadVolume(
-      str(logic.getDefaultReferencePath()))
+    self.referenceVolumeNode = self.logic.loadVolume(
+      logic.getDefaultReferencePath())
     self.parcellationLabelMapNode = logic.loadParcellation(
       logic.getDefaultParcellationPath())
     slicer.util.setSliceViewerLayers(
       label=None,
     )
     self.parcellation.load()
-    self.applyButton.enabled = True
-
-  def onApplyButton(self):
-    colorNode = slicer.util.getFirstNodeByClassByName(
-      'vtkMRMLColorTableNode',
-      'Cividis',
-    )
-    scoresDict = self.logic.getTestScores()
-    self.scoresVolumeNode = self.logic.getScoresVolumeNode(
-      scoresDict, colorNode, self.parcellationLabelMapNode)
-    self.parcellation.setScoresColors(scoresDict, colorNode)
-    # # self.parcellationPathEdit.addCurrentPathToHistory()
-    # # self.referencePathEdit.addCurrentPathToHistory()
-    # self.scoresPathEdit.addCurrentPathToHistory()
-
-    # logic = SemiologyVisualizationLogic()
-    # self.referenceVolumeNode = slicer.util.loadVolume(
-    #   str(logic.getDefaultReferencePath()))
-    # self.parcellationVolumeNode = logic.loadParcellation(
-    #   logic.getDefaultParcellationPath())
-    # # self.referenceVolumeNode = slicer.util.loadVolume(
-    # #   self.referencePathEdit.currentPath)
-    # # self.parcellationVolumeNode = logic.loadParcellation(
-    # #   self.parcellationPathEdit.currentPath)
-    # # self.parcellationSegmentationNode = logic.labelMapToSegmentation(
-    # #   self.parcellationVolumeNode)
-    # self.scoresNode = logic.getScoresVolumeNode(
-    #   self.scoresPathEdit.currentPath,
-    #   self.parcellationVolumeNode,
-    # )
-    slicer.util.setSliceViewerLayers(
-      foreground=self.scoresVolumeNode,
-      foregroundOpacity=0,
-      labelOpacity=0,
-    )
-    self.scoresVolumeNode.GetDisplayNode().SetInterpolate(False)
+    self.updateButton.enabled = True
+    self.semiologiesCollapsibleButton.enabled = True
+    self.settingsCollapsibleButton.enabled = True
 
 
 #
@@ -217,20 +217,36 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
 class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
 
-  def getSemiologiesDict(self, semiologies):
+  def getSemiologiesDict(self, semiologies, slot):
     semiologiesDict = {}
     for semiology in semiologies:
+      leftCheckBox = qt.QCheckBox()
+      rightCheckBox = qt.QCheckBox()
+      leftCheckBox.toggled.connect(slot)
+      rightCheckBox.toggled.connect(slot)
       semiologiesDict[semiology] = dict(
-        leftCheckBox=qt.QCheckBox(),
-        rightCheckBox=qt.QCheckBox(),
+          leftCheckBox=leftCheckBox,
+          rightCheckBox=rightCheckBox,
       )
     return semiologiesDict
 
+  def loadVolume(self, imagePath):
+    stem = Path(imagePath).name.split('.')[0]
+    try:
+      volumeNode = slicer.util.getNode(stem)
+    except slicer.util.MRMLNodeNotFoundException:
+      volumeNode = slicer.util.loadVolume(str(imagePath))
+    return volumeNode
+
   def loadParcellation(self, imagePath, gifVersion=None):
-    volumeNode = slicer.util.loadLabelVolume(str(imagePath))
-    colorNode = self.getGifColorNode(version=gifVersion)
-    displayNode = volumeNode.GetDisplayNode()
-    displayNode.SetAndObserveColorNodeID(colorNode.GetID())
+    stem = Path(imagePath).name.split('.')[0]
+    try:
+      volumeNode = slicer.util.getNode(stem)
+    except slicer.util.MRMLNodeNotFoundException:
+      volumeNode = slicer.util.loadLabelVolume(str(imagePath))
+      colorNode = self.getGifColorNode(version=gifVersion)
+      displayNode = volumeNode.GetDisplayNode()
+      displayNode.SetAndObserveColorNodeID(colorNode.GetID())
     return volumeNode
 
   def getGifTablePath(self, version=None):
@@ -460,18 +476,20 @@ class Parcellation(ABC):
       scores = scores[scores > 0]  # do I want this?
       minScore = min(scores)
       maxScore = max(scores)
-      color = BLACK
-      opacity = 0
+      color = LIGHT_GRAY
+      opacity2D = 0
+      opacity3D = 1
       if label in scoresDict:
         score = scoresDict[label]
         if score > 0:
-          opacity = 1
+          opacity2D = 1
+          opacity3D = 1
           score -= minScore
           score /= maxScore
           color = self.getColorFromScore(score, colorNode)
       segment.SetColor(color)
-      self.setSegmentOpacity(segment, opacity, dimension=2)
-      self.setSegmentOpacity(segment, opacity, dimension=3)
+      self.setSegmentOpacity(segment, opacity2D, dimension=2)
+      self.setSegmentOpacity(segment, opacity3D, dimension=3)
     progressDialog.setValue(numSegments)
     slicer.app.processEvents()
     progressDialog.close()
@@ -568,6 +586,7 @@ class ColorTable(ABC):
     else:
       raise KeyError(f'Structure {name} not found in color table')
     return result
+
 
 class GIFColorTable(ColorTable):
   pass
