@@ -170,6 +170,8 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
   def updateColors(self):
     colorNode = self.colorSelector.currentNode()
+    if colorNode is None:
+      slicer.util.errorDisplay('No color node is selected')
     scoresDict = self.getScoresFromGUI()
     try:
       self.scoresVolumeNode = self.logic.getScoresVolumeNode(
