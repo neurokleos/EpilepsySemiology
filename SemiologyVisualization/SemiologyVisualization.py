@@ -55,6 +55,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.makeGUI()
     self.parcellationLabelMapNode = None
     slicer.semiologyVisualization = self
+    self.logic.installRepository()
 
   def makeGUI(self):
     self.makeLoadDataButton()
@@ -145,14 +146,15 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.layout.addWidget(self.updateButton)
 
   def getSemiologiesWidget(self):
-    semiologiesDict = self.logic.getSemiologiesDict(
-      semiologies, self.onAutoUpdateButton)
+    from mega_analysis import get_all_semiology_terms
+    self.semiologiesDict = self.logic.getSemiologiesDict(
+      get_all_semiology_terms(), self.onAutoUpdateButton)
     semiologiesWidget = qt.QWidget()
     semiologiesLayout = qt.QGridLayout(semiologiesWidget)
     semiologiesLayout.addWidget(qt.QLabel('<b>Semiology</b>'), 0, 0)
     semiologiesLayout.addWidget(qt.QLabel('<b>Left</b>'), 0, 1)
     semiologiesLayout.addWidget(qt.QLabel('<b>Right</b>'), 0, 2)
-    iterable = enumerate(semiologiesDict.items(), start=1)
+    iterable = enumerate(self.semiologiesDict.items(), start=1)
     for row, (semiology, widgetsDict) in iterable:
       semiologiesLayout.addWidget(qt.QLabel(semiology), row, 0)
       semiologiesLayout.addWidget(widgetsDict['leftCheckBox'], row, 1)
@@ -160,8 +162,24 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     return semiologiesWidget
 
   def getScoresFromGUI(self):
-    # TODO
-    return self.logic.getTestScores()
+    from mega_analysis import get_scores
+    semiologyTerm = self.semiologyTermFromGUI()
+    if semiologyTerm is None:
+      return
+    scoresDict = get_scores(
+      semiology_term=semiologyTerm,
+    )
+    return scoresDict
+
+  def semiologyTermFromGUI(self):
+    """TODO"""
+    for (semiologyTerm, widgetsDict) in self.semiologiesDict.items():
+      if widgetsDict['leftCheckBox'].isChecked() or widgetsDict['rightCheckBox'].isChecked():
+        result = semiologyTerm
+        break
+    else:
+      result = None
+    return result
 
   # Slots
   def onAutoUpdateButton(self):
@@ -343,6 +361,13 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     for colorNode in slicer.util.getNodesByClass('vtkMRMLColorTableNode'):
       if colorNode.GetName() not in COLORMAPS:
         slicer.mrmlScene.RemoveNode(colorNode)
+
+  def installRepository(self):
+    repoDir = Path('~/git/Epilepsy-Repository/').expanduser()
+    slicer.util.pip_install(
+      # 'git+https://github.com/thenineteen/Epilepsy-Repository#egg=mega_analysis',
+      f'--editable {repoDir}',
+    )
 
 
 class SemiologyVisualizationTest(ScriptedLoadableModuleTest):
