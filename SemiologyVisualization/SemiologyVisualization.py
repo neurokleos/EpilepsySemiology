@@ -158,13 +158,13 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     return semiologiesWidget
 
   def getScoresFromGUI(self):
-    from mega_analysis import get_scores
+    from mega_analysis import get_scores_dict
     result = self.semiologyTermAndSideFromGUI()
     if result is None:
       return
     else:
       semiologyTerm, symptomsSide = result
-    scoresDict = get_scores(
+    scoresDict = get_scores_dict(
       semiology_term=semiologyTerm,
       symptoms_side=symptomsSide,
       dominant_hemisphere=self.getDominantHemisphereFromGUI(),
@@ -198,13 +198,8 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     if colorNode is None:
       slicer.util.errorDisplay('No color node is selected')
     scoresDict = self.getScoresFromGUI()
-    try:
-      self.scoresVolumeNode = self.logic.getScoresVolumeNode(
-        scoresDict, colorNode, self.parcellationLabelMapNode)
-    except Exception as e:
-      print(e)
-      print('Error getting parcellation label map. Click on "Load data"')
-      return
+    self.scoresVolumeNode = self.logic.getScoresVolumeNode(
+      scoresDict, colorNode, self.parcellationLabelMapNode)
     self.parcellation.setScoresColors(scoresDict, colorNode)
 
     slicer.util.setSliceViewerLayers(
@@ -328,11 +323,12 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     parcellationArray = sitk.GetArrayViewFromImage(parcellationImage)
     scoresArray = np.zeros_like(parcellationArray)
 
-    for (label, score) in scoresDict.items():
-      label = int(label)
-      score = float(score)
-      labelMask = parcellationArray == label
-      scoresArray[labelMask] = score
+    if scoresDict is not None:
+      for (label, score) in scoresDict.items():
+        label = int(label)
+        score = float(score)
+        labelMask = parcellationArray == label
+        scoresArray[labelMask] = score
 
     scoresImage = self.getImageFromArray(scoresArray, parcellationImage)
     scoresName = 'Scores'
@@ -343,7 +339,7 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
     displayNode.SetLowerThreshold(1)
     displayNode.ApplyThresholdOn()
     displayNode.SetAutoWindowLevel(False)
-    windowMin = scoresArray[scoresArray > 0].min()
+    windowMin = scoresArray[scoresArray > 0].min() if scoresArray.any() else 0
     windowMax = scoresArray.max()
     displayNode.SetWindowLevelMinMax(windowMin, windowMax)
     return scoresVolumeNode
@@ -522,14 +518,15 @@ class Parcellation(ABC):
       progressDialog.setLabelText(segment.GetName())
       slicer.app.processEvents()
       label = self.getLabelFromSegment(segment)
-      scores = np.array(list(scoresDict.values()))
-      scores = scores[scores > 0]  # do I want this?
-      minScore = min(scores)
-      maxScore = max(scores)
+      if scoresDict is not None:
+        scores = np.array(list(scoresDict.values()))
+        scores = scores[scores > 0]  # do I want this?
+        minScore = min(scores)
+        maxScore = max(scores)
       color = LIGHT_GRAY
       opacity2D = 0
       opacity3D = 1
-      if label in scoresDict:
+      if scoresDict is not None and label in scoresDict:
         score = scoresDict[label]
         if score > 0:
           opacity2D = 1
