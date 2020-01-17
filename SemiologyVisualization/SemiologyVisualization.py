@@ -15,6 +15,8 @@ BLACK = 0, 0, 0
 GRAY = 0.5, 0.5, 0.5
 LIGHT_GRAY = 0.75, 0.75, 0.75
 WHITE = 1, 1, 1
+LEFT = 'L'
+RIGHT = 'R'
 
 #
 # SemiologyVisualization
@@ -37,17 +39,12 @@ class SemiologyVisualization(ScriptedLoadableModule):
 #
 # SemiologyVisualizationWidget
 #
-
-
-import string
-semiologies = [f'Semiology {x}' for x in string.ascii_uppercase]
-
-
 class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
     self.logic = SemiologyVisualizationLogic()
+    self.logic.installRepository()
     self.parcellation = GIFParcellation(
       segmentationPath=self.logic.getGifSegmentationPath(),
       colorTablePath=self.logic.getGifTablePath(),
@@ -55,7 +52,6 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.makeGUI()
     self.parcellationLabelMapNode = None
     slicer.semiologyVisualization = self
-    self.logic.installRepository()
 
   def makeGUI(self):
     self.makeLoadDataButton()
@@ -163,23 +159,34 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
   def getScoresFromGUI(self):
     from mega_analysis import get_scores
-    semiologyTerm = self.semiologyTermFromGUI()
-    if semiologyTerm is None:
+    result = self.semiologyTermAndSideFromGUI()
+    if result is None:
       return
+    else:
+      semiologyTerm, symptomsSide = result
     scoresDict = get_scores(
       semiology_term=semiologyTerm,
+      symptoms_side=symptomsSide,
+      dominant_hemisphere=self.getDominantHemisphereFromGUI(),
     )
     return scoresDict
 
-  def semiologyTermFromGUI(self):
-    """TODO"""
+  def semiologyTermAndSideFromGUI(self):
     for (semiologyTerm, widgetsDict) in self.semiologiesDict.items():
-      if widgetsDict['leftCheckBox'].isChecked() or widgetsDict['rightCheckBox'].isChecked():
-        result = semiologyTerm
+      isLeft = widgetsDict['leftCheckBox'].isChecked()
+      isRight = widgetsDict['rightCheckBox'].isChecked()
+      if isLeft:
+        result = semiologyTerm, LEFT
+        break
+      elif isRight:
+        result = semiologyTerm, RIGHT
         break
     else:
       result = None
     return result
+
+  def getDominantHemisphereFromGUI(self):
+    return LEFT if self.leftDominantRadioButton.isChecked() else RIGHT
 
   # Slots
   def onAutoUpdateButton(self):
@@ -248,8 +255,10 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
   def getSemiologiesDict(self, semiologies, slot):
     semiologiesDict = {}
     for semiology in semiologies:
-      leftCheckBox = qt.QCheckBox()
-      rightCheckBox = qt.QCheckBox()
+      # leftCheckBox = qt.QCheckBox()
+      # rightCheckBox = qt.QCheckBox()
+      leftCheckBox = qt.QRadioButton()
+      rightCheckBox = qt.QRadioButton()
       leftCheckBox.toggled.connect(slot)
       rightCheckBox.toggled.connect(slot)
       semiologiesDict[semiology] = dict(
@@ -363,9 +372,9 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
         slicer.mrmlScene.RemoveNode(colorNode)
 
   def installRepository(self):
-    repoDir = Path('~/git/Epilepsy-Repository/').expanduser()
+    repoDir = Path('~/git/Semiology-Visualisation-Tool/').expanduser()
     slicer.util.pip_install(
-      # 'git+https://github.com/thenineteen/Epilepsy-Repository#egg=mega_analysis',
+      # 'git+https://github.com/thenineteen/Semiology-Visualisation-Tool#egg=mega_analysis',
       f'--editable {repoDir}',
     )
 
