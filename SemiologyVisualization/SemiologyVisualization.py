@@ -56,8 +56,8 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
   def makeGUI(self):
     self.makeLoadDataButton()
     self.makeSettingsButton()
-    self.makeSemiologiesButton()
     self.makeUpdateButton()
+    self.makeSemiologiesButton()
 
     # Add vertical spacer
     self.layout.addStretch(1)
@@ -71,9 +71,12 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
 
     self.makeDominantHemisphereButton()
     self.makeEzHemisphereButton()
-    self.makeColorsButton()
+    # self.makeColorsButton()
+    self.makeHemispheresVisibleButtons()
+    self.makeShowGIFButton()
     self.autoUpdateCheckBox = qt.QCheckBox()
     self.autoUpdateCheckBox.setChecked(True)
+    self.autoUpdateCheckBox.toggled.connect(self.onAutoUpdateCheckBox)
     self.settingsLayout.addRow('Auto-update: ', self.autoUpdateCheckBox)
 
   def makeDominantHemisphereButton(self):
@@ -135,6 +138,23 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.loadDataButton.clicked.connect(self.onLoadDataButton)
     self.layout.addWidget(self.loadDataButton)
 
+  def makeShowGIFButton(self):
+    self.showGifButton = qt.QPushButton('Show GIF colors')
+    self.showGifButton.clicked.connect(self.onshowGifButton)
+    self.settingsLayout.addWidget(self.showGifButton)
+
+  def makeHemispheresVisibleButtons(self):
+    self.showLeftHemisphereCheckBox = qt.QCheckBox('Left')
+    self.showRightHemisphereCheckBox = qt.QCheckBox('Right')
+    self.showLeftHemisphereCheckBox.setChecked(True)
+    self.showRightHemisphereCheckBox.setChecked(True)
+    showHemispheresLayout = qt.QHBoxLayout()
+    showHemispheresLayout.addWidget(self.showLeftHemisphereCheckBox)
+    showHemispheresLayout.addWidget(self.showRightHemisphereCheckBox)
+    self.showLeftHemisphereCheckBox.toggled.connect(self.onAutoUpdateButton)
+    self.showRightHemisphereCheckBox.toggled.connect(self.onAutoUpdateButton)
+    self.settingsLayout.addRow('Show hemispheres: ', showHemispheresLayout)
+
   def makeUpdateButton(self):
     self.updateButton = qt.QPushButton('Update')
     self.updateButton.enabled = False
@@ -142,7 +162,11 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     self.layout.addWidget(self.updateButton)
 
   def getSemiologiesWidget(self):
-    from mega_analysis import get_all_semiology_terms
+    try:
+      from mega_analysis import get_all_semiology_terms
+    except ImportError as e:
+      message = f'{e}\n\nPlease restart 3D Slicer and try again'
+      slicer.util.errorDisplay(message)
     self.semiologiesDict = self.logic.getSemiologiesDict(
       get_all_semiology_terms(), self.onAutoUpdateButton)
     semiologiesWidget = qt.QWidget()
@@ -157,10 +181,19 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
       semiologiesLayout.addWidget(widgetsDict['rightCheckBox'], row, 2)
     return semiologiesWidget
 
+  def getColorNode(self):
+    # colorNode = self.colorSelector.currentNode()
+    colorNode = slicer.util.getFirstNodeByClassByName(
+      'vtkMRMLColorTableNode',
+      'Viridis',
+    )
+    return colorNode
+
   def getScoresFromGUI(self):
     from mega_analysis import get_scores_dict
-    result = self.semiologyTermAndSideFromGUI()
+    result = self.getSemiologyTermAndSideFromGUI()
     if result is None:
+      slicer.util.messageBox('Please select a semiology')
       return
     else:
       semiologyTerm, symptomsSide = result
@@ -171,7 +204,7 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     )
     return scoresDict
 
-  def semiologyTermAndSideFromGUI(self):
+  def getSemiologyTermAndSideFromGUI(self):
     for (semiologyTerm, widgetsDict) in self.semiologiesDict.items():
       isLeft = widgetsDict['leftCheckBox'].isChecked()
       isRight = widgetsDict['rightCheckBox'].isChecked()
@@ -193,14 +226,21 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
     if self.autoUpdateCheckBox.isChecked():
       self.updateColors()
 
+  def onshowGifButton(self):
+    self.parcellation.setOriginalColors()
+
   def updateColors(self):
-    colorNode = self.colorSelector.currentNode()
+    colorNode = self.getColorNode()
     if colorNode is None:
       slicer.util.errorDisplay('No color node is selected')
+      return
     scoresDict = self.getScoresFromGUI()
     self.scoresVolumeNode = self.logic.getScoresVolumeNode(
       scoresDict, colorNode, self.parcellationLabelMapNode)
-    self.parcellation.setScoresColors(scoresDict, colorNode)
+    showLeft = self.showLeftHemisphereCheckBox.isChecked()
+    showRight = self.showRightHemisphereCheckBox.isChecked()
+    self.parcellation.setScoresColors(
+      scoresDict, colorNode, showLeft=showLeft, showRight=showRight)
 
     slicer.util.setSliceViewerLayers(
       foreground=self.scoresVolumeNode,
@@ -236,15 +276,16 @@ class SemiologyVisualizationWidget(ScriptedLoadableModuleWidget):
       label=None,
     )
     self.parcellation.load()
-    self.updateButton.enabled = True
     self.semiologiesCollapsibleButton.enabled = True
     self.settingsCollapsibleButton.enabled = True
+
+  def onAutoUpdateCheckBox(self):
+    self.updateButton.setDisabled(self.autoUpdateCheckBox.isChecked())
 
 
 #
 # SemiologyVisualizationLogic
 #
-
 class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
 
   def getSemiologiesDict(self, semiologies, slot):
@@ -368,11 +409,14 @@ class SemiologyVisualizationLogic(ScriptedLoadableModuleLogic):
         slicer.mrmlScene.RemoveNode(colorNode)
 
   def installRepository(self):
-    repoDir = Path('~/git/Semiology-Visualisation-Tool/').expanduser()
-    slicer.util.pip_install(
-      # 'git+https://github.com/thenineteen/Semiology-Visualisation-Tool#egg=mega_analysis',
-      f'--editable {repoDir}',
-    )
+    try:
+      import mega_analysis
+    except ImportError:
+      repoDir = Path('~/git/Semiology-Visualisation-Tool/').expanduser()
+      slicer.util.pip_install(
+        # 'git+https://github.com/thenineteen/Semiology-Visualisation-Tool#egg=mega_analysis',
+        f'--editable {repoDir}',
+      )
 
 
 class SemiologyVisualizationTest(ScriptedLoadableModuleTest):
@@ -505,7 +549,13 @@ class Parcellation(ABC):
     slicer.app.processEvents()
     progressDialog.close()
 
-  def setScoresColors(self, scoresDict, colorNode):
+  def setScoresColors(
+      self,
+      scoresDict,
+      colorNode,
+      showLeft=True,
+      showRight=True,
+      ):
     segments = self.getSegments()
     numSegments = len(segments)
     progressDialog = slicer.util.createProgressDialog(
@@ -534,6 +584,10 @@ class Parcellation(ABC):
           score -= minScore
           score /= maxScore
           color = self.getColorFromScore(score, colorNode)
+      if not showLeft and 'Left' in segment.GetName():
+        opacity3D = 0
+      if not showRight and 'Right' in segment.GetName():
+        opacity3D = 0
       segment.SetColor(color)
       self.setSegmentOpacity(segment, opacity2D, dimension=2)
       self.setSegmentOpacity(segment, opacity3D, dimension=3)
