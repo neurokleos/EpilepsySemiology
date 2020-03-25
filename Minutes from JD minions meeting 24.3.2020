@@ -1,0 +1,34 @@
+EpiNav Strategy group  
+Tuesday 24th March 2020 @11:00, via MS Teams
+John Duncan (JD), Fernando Perez Garcia (FP), Ali Alim Marvasti (AM), Gloria Romagnoli (GR)
+
+1.	Semiology mega-analysis
+a.	AM, GR: data collection up to mid-March counts 648 papers screened, 141 included, 1834 patients, 564 lateralising data points, 3174 localising data points. Data extraction completion by May 2020. 
+b.	FP, AM: optimised script to visualise laterality on FP tool
+
+2.	Evaluation of semiology in resected cases
+a.	FP: completed segments areas of resections
+b.	Pre-2007 data “archeology” in progress, liaised with John Steel and instructed on how to access Chalfont data. 
+c.	In June, FP will look for overlap of resected area and implicated area from symptoms, using the resection-to-semiology approach from A&G atlas translation tool.
+
+3.	Application of semiology -anatomy translator 
+a.	FP created repository on GitHub, and we all need to access the semiology module 
+via https://github.com/fepegar/EpilepsySemiology/
+b.	Demo of semiology-to-brain atlas on individual data scheduled for the 9th of April
+c.	Likely that semiology-to-brain atlas tool will be used for presurgical planning over the next few months, since sEEG won’t be performed because of the Covid-19 outbreak 
+
+4.	FP AI of seizure videos
+a.	Issue with seizure videos access due to Covid19-related home office (will follow-up with JD)
+b.	Issue with resection data UCL repository – discussed alternative options
+
+5.	Papers, Upgrades etc
+a.	AM MPhil, PhD upgrade confirmed for end of May – probably on Skype
+b.	FP MPhil, PhD upgrade cancelled due to Covid19 
+c.	Discussed potential AM PhD examiners: External: P Kahane (G), MP Richardson (KCL). Internal: P Nachev.
+d.	Review paper on AI and epilepsy surgery: internal review
+e.	Paper comparing TLE v extra TLE: internal review
+
+Next JD minions’ meeting
+MS Teams, Tuesday 9th April @9:00
+
+
